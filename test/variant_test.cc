@@ -23,6 +23,16 @@ struct nothing {
 };
 using message = splice::variant<text, picture, nothing>;
 
+// A tree: a node holding a variant of a vector of itself, declared while
+// the node is incomplete.
+struct node;
+struct branch {
+  std::vector<node> children;
+};
+struct node {
+  splice::variant<branch, std::string> held;
+};
+
 // How many times each was made and destroyed: that a variant destroys what
 // it made, once.
 struct counted {
@@ -59,6 +69,15 @@ TEST(Variant, HoldsWhatItWasMadeWith) {
   EXPECT_EQ(splice::get<picture>(one).height, 4);
   EXPECT_EQ(splice::get<1>(one).height, 4);
   EXPECT_THROW((void)splice::get<text>(one), std::bad_variant_access);
+}
+
+TEST(Variant, HoldsATreeOfItself) {
+  node root;
+  splice::get<branch>(root.held).children.push_back(node{std::string("leaf")});
+  splice::get<branch>(root.held).children.push_back(node{});
+  node copy = root;
+  EXPECT_EQ(splice::get<branch>(copy.held).children.size(), 2u);
+  EXPECT_EQ(splice::get<std::string>(splice::get<branch>(copy.held).children[0].held), "leaf");
 }
 
 TEST(Variant, GetIfByIndex) {

@@ -140,11 +140,15 @@ class variant {
  public:
   static constexpr std::size_t kSize = sizeof...(Ts);
 
-  // As std::variant's: the first alternative, made by default.
-  constexpr variant() noexcept(std::is_nothrow_default_constructible_v<first>)
-    requires std::default_initializable<first>
-      : fIndex(0) {
-    this->make<first>();
+  // As std::variant's: the first alternative, made by default. A template,
+  // so that whether it can be is asked only where one is made: a variant
+  // inside a type it holds a vector of (a tree's node) is declared while
+  // that type is incomplete, and asking then instantiates the vector's
+  // members on it -- as std::variant defers it with a dummy parameter.
+  template <class First = first>
+    requires std::default_initializable<First>
+  constexpr variant() noexcept(std::is_nothrow_default_constructible_v<First>) : fIndex(0) {
+    this->make<First>();
   }
   // One of them, converted to: only its own type, exactly -- a request, a
   // tag, a change as it is named.
