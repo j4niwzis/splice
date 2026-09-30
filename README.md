@@ -35,7 +35,7 @@ object's pointer once before each dispatch.
 
 ## Building
 
-CMake 4.3 or newer and clang with libc++ (`import std`). Dependencies come
+C++23 or newer, CMake 4.3 or newer and clang with libc++ (`import std`). Dependencies come
 through [cmake-everywhere](https://github.com/j4niwzis/cmake-everywhere); the
 tests use googletest as a module.
 

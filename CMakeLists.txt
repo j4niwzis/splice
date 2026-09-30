@@ -4,8 +4,14 @@ cmake_minimum_required(VERSION 4.3.4 FATAL_ERROR)
 # variant built in time linear in its alternatives, and splice::overloaded --
 # as C++26 modules.
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/import-std.cmake)
-set(CMAKE_CXX_STANDARD 26)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# C++23 is all splice needs, and the standard is the one of what imports it:
+# a module is built once, for the standard its target has, and a library of
+# the family built as C++23 (skiff, skiff-widgets) imports it as that. Built
+# alone, for its tests: C++26, as the family is.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(CMAKE_CXX_STANDARD 26)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
 
 project(splice VERSION 0.1 LANGUAGES CXX)
 
@@ -27,7 +33,7 @@ set(SPLICE_CONSTEXPR_STEPS 300000000 CACHE STRING
 add_library(splice)
 target_sources(splice PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
   FILES src/variant.cc src/overloaded.cc src/splice.cc)
-target_compile_features(splice PUBLIC cxx_std_26)
+target_compile_features(splice PUBLIC cxx_std_23)
 target_compile_options(splice PUBLIC
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${SPLICE_CONSTEXPR_STEPS}>)
 # A variant's alternatives through tables outside a release build: the
