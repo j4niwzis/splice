@@ -424,6 +424,16 @@ template <class T, class... Ts>
 [[nodiscard]] constexpr const T* get_if(const variant<Ts...>* v) noexcept {
   return v ? v->template get_if<T>() : nullptr;
 }
+template <std::size_t I, class... Ts>
+  requires(I < sizeof...(Ts))
+[[nodiscard]] constexpr auto* get_if(variant<Ts...>* v) noexcept {
+  return v && v->index() == I ? v->template get_if<std::tuple_element_t<I, std::tuple<Ts...>>>() : nullptr;
+}
+template <std::size_t I, class... Ts>
+  requires(I < sizeof...(Ts))
+[[nodiscard]] constexpr const auto* get_if(const variant<Ts...>* v) noexcept {
+  return v && v->index() == I ? v->template get_if<std::tuple_element_t<I, std::tuple<Ts...>>>() : nullptr;
+}
 template <class T, class... Ts>
 [[nodiscard]] constexpr bool holds_alternative(const variant<Ts...>& v) noexcept {
   return v.index() == detail::index_in<T, Ts...>();

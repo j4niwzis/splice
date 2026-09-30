@@ -61,6 +61,16 @@ TEST(Variant, HoldsWhatItWasMadeWith) {
   EXPECT_THROW((void)splice::get<text>(one), std::bad_variant_access);
 }
 
+TEST(Variant, GetIfByIndex) {
+  message one = picture{5, 6};
+  ASSERT_NE(splice::get_if<1>(&one), nullptr);
+  EXPECT_EQ(splice::get_if<1>(&one)->width, 5);
+  EXPECT_EQ(splice::get_if<0>(&one), nullptr);
+  const message& same = one;
+  EXPECT_EQ(splice::get_if<1>(&same)->height, 6);
+  EXPECT_TRUE(splice::holds_alternative<picture>(same));
+}
+
 TEST(Variant, MemberVisit) {
   message one = text{"hi"};
   one.visit(splice::overloaded{[](text& t) { t.said += "!"; }, [](auto&) {}});
