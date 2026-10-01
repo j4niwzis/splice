@@ -3,7 +3,7 @@
   "lock": 1,
   "ports": {
     "cmake-everywhere": {
-      "version": "v0.2.20"
+      "version": "v0.2.21"
     },
     "googletest-modules": {
       "commit": "706920f1d230f0316d271466d8885735be3e300e",
