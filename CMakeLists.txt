@@ -68,23 +68,7 @@ endif()
 # the libraries of the family link, here and from a prefix alike.
 option(SPLICE_INSTALL "Install splice and its CMake package" ${PROJECT_IS_TOP_LEVEL})
 if(SPLICE_INSTALL)
-  include(GNUInstallDirs)
-  include(CMakePackageConfigHelpers)
-  install(TARGETS splice
-    EXPORT spliceTargets
-    FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_LIBDIR}/splice/modules
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-  install(EXPORT spliceTargets
-    NAMESPACE splice::
-    CXX_MODULES_DIRECTORY modules
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/splice)
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/spliceConfig.cmake"
-    "include(\"\${CMAKE_CURRENT_LIST_DIR}/spliceTargets.cmake\")\n"
-    "if(NOT TARGET splice)\n  add_library(splice ALIAS splice::splice)\nendif()\n")
-  write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/spliceConfigVersion.cmake"
-    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMinorVersion)
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/spliceConfig.cmake" "${CMAKE_CURRENT_BINARY_DIR}/spliceConfigVersion.cmake"
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/splice)
+  cme_install_package(splice)
 endif()
 
 if(SPLICE_TESTS)
