@@ -1,0 +1,14 @@
+name: gcc dispatch bench
+on:
+  push:
+    branches: [bench-gcc]
+  workflow_dispatch:
+jobs:
+  gcc:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: bench
+        run: |
+          g++-14 --version || sudo apt-get install -y g++-14
+          bash bench/gcc_bench.sh
