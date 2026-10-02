@@ -17,9 +17,11 @@
 //
 // Which alternative an operation is for -- making, moving, copying,
 // destroying, visiting -- is found two ways, by the build:
-// - optimised (SPLICE_ERASED not defined): the alternatives split in halves,
-//   the index compared once per step -- a tree the optimiser lays out as a
-//   jump or a few branches;
+// - optimised (SPLICE_ERASED not defined): one fold over the alternatives,
+//   the index compared with each, in one function, the index assumed in
+//   range -- which the optimiser makes one switch, and merges with the next
+//   dispatch on the same index (docs/fold-dispatch.md: without the
+//   assumption, it does neither);
 // - not (SPLICE_ERASED, which CMake defines outside a release build unless
 //   SPLICE_ERASE is off): a table of function pointers per operation, read
 //   through a volatile pointer, so nothing is inlined across it -- only the
@@ -77,19 +79,26 @@ constexpr decltype(auto) peel_to(layer<T, Rest>, std::size_t index, F& f) {
     return f(std::type_identity<T>{});
   return peel_to(Rest{}, index - 1, f);
 }
-// The same, halved each step: the alternatives [Lo, Hi) split at their
-// middle, the index compared once per step -- log2(n) compares, not n, a
-// tree the optimiser lays out as a jump or a few branches, each node one
-// instantiation (2n in all).
-template <std::size_t Lo, std::size_t Hi, class F, class... Ts>
-constexpr decltype(auto) halve_to(std::size_t index, F& f) {
-  if constexpr (Hi - Lo == 1) {
-    return f(std::type_identity<std::tuple_element_t<Lo, std::tuple<Ts...>>>{});
+// `f` given the type of the one at `index`: a fold of index == I over the
+// alternatives, in this one function -- what it gives back, none, a
+// reference or a value (kept in an optional: it may have no default).
+// The index is assumed in range. Without that, the optimiser keeps a path
+// for an index past the last, and a second dispatch on the same index is
+// not merged with the first: every arm reads back what the one before
+// wrote (docs/fold-dispatch.md).
+template <class R, class F, class... Ts, std::size_t... I>
+constexpr R fold_to(std::size_t index, F& f, std::index_sequence<I...>) {
+  [[assume(index < sizeof...(I))]];
+  if constexpr (std::is_void_v<R>) {
+    (void)((index == I ? (f(std::type_identity<Ts>{}), true) : false) || ...);
+  } else if constexpr (std::is_reference_v<R>) {
+    std::remove_reference_t<R>* out = nullptr;
+    (void)((index == I ? (out = std::addressof(f(std::type_identity<Ts>{})), true) : false) || ...);
+    return static_cast<R>(*out);
   } else {
-    constexpr std::size_t mid = Lo + (Hi - Lo) / 2;
-    if (index < mid)
-      return halve_to<Lo, mid, F, Ts...>(index, f);
-    return halve_to<mid, Hi, F, Ts...>(index, f);
+    std::optional<R> out;
+    (void)((index == I ? (out.emplace(f(std::type_identity<Ts>{})), true) : false) || ...);
+    return *std::move(out);
   }
 }
 
@@ -285,7 +294,7 @@ class variant {
       }
     } else {
       auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
-      return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
+      return detail::fold_to<Out, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
   template <class R, bool Deduced, class F>
@@ -303,7 +312,7 @@ class variant {
       }
     } else {
       auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
-      return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
+      return detail::fold_to<Out, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
 
@@ -357,7 +366,7 @@ class variant {
       }
     } else {
       auto at = [this, from]<class T>(std::type_identity<T>) { move_one<T>(*this, from); };
-      detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
+      detail::fold_to<void, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
   constexpr void copy_from(const variant& other) {
@@ -372,7 +381,7 @@ class variant {
       }
     } else {
       auto at = [this, from]<class T>(std::type_identity<T>) { copy_one<T>(*this, from); };
-      detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
+      detail::fold_to<void, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
   constexpr void destroy() {
@@ -387,7 +396,7 @@ class variant {
       }
     } else {
       auto at = [object]<class T>(std::type_identity<T>) { destroy_one<T>(object); };
-      detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
+      detail::fold_to<void, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
 
