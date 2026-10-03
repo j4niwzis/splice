@@ -4,3 +4,5 @@ export module splice;
 
 export import splice.variant;
 export import splice.overloaded;
+export import splice.fields;
+export import splice.remap;

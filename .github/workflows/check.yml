@@ -17,12 +17,20 @@ env:
 
 jobs:
   clang:
-    name: clang ${{ matrix.llvm }}, libc++
+    name: clang ${{ matrix.llvm }}, libc++, C++${{ matrix.standard }} (${{ matrix.fields }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         llvm: [23]
+        # The fields through C++26's binding packs, and through Boost.PFR
+        # as a C++23 library.
+        fields: [PACKS, PFR]
+        include:
+          - fields: PACKS
+            standard: 26
+          - fields: PFR
+            standard: 23
     steps:
       # The whole history, so that each file's time can be the time of the
       # commit that last changed it (below).
@@ -84,7 +92,9 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-            -DSPLICE_CONSTEXPR_STEPS=2000000000
+            -DSPLICE_CONSTEXPR_STEPS=2000000000 \
+            -DCMAKE_CXX_STANDARD=${{ matrix.standard }} \
+            -DSPLICE_FIELDS=${{ matrix.fields }}
           cmake --build build
 
       - name: test

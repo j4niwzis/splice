@@ -15,7 +15,7 @@ else()
   set(splice_gtest gtest_main)
 endif()
 
-foreach(name IN ITEMS variant_test)
+foreach(name IN ITEMS variant_test remap_test)
   add_executable(splice-${name} ${name}.cc)
   target_link_libraries(splice-${name} PRIVATE splice ${splice_gtest})
   add_test(NAME ${name} COMMAND splice-${name})
