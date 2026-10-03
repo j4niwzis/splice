@@ -9,7 +9,7 @@
 // Here: which one it is, a buffer as large as the largest, and a pointer to
 // the object in it -- what the compiler sees the object through, not the
 // buffer's bytes, read once before each dispatch (see visit_as). The
-// object is held in a holder<T>, derived from one empty
+// object is held in a holder<T> (splice.held), derived from one empty
 // base the pointer is kept as: a base pointer cast down to its holder is a
 // constant expression everywhere, where a void* cast back is not. In
 // constant evaluation the holder is allocated instead: placement into a
@@ -29,6 +29,7 @@
 export module splice.variant;
 
 import std;
+import splice.held;
 
 namespace splice::detail {
 // Whether alternatives are found through tables (outside a release build):
@@ -38,23 +39,6 @@ inline constexpr bool kVariantTables = true;
 #else
 inline constexpr bool kVariantTables = false;
 #endif
-
-// What every alternative is held in: one base for the pointer, empty.
-struct held {};
-template <class T>
-struct holder : held {
-  T value;
-  template <class... Args>
-  constexpr explicit holder(std::in_place_t, Args&&... args) : value(std::forward<Args>(args)...) {}
-};
-template <class T>
-[[nodiscard]] constexpr T& value_of(held* p) noexcept {
-  return static_cast<holder<T>*>(p)->value;
-}
-template <class T>
-[[nodiscard]] constexpr const T& value_of(const held* p) noexcept {
-  return static_cast<const holder<T>*>(p)->value;
-}
 
 // The onion: the alternatives folded into one nested type by `|`, walked a
 // layer at a time.
@@ -209,7 +193,7 @@ class variant {
     this->destroy();
     fIndex = static_cast<index_type>(detail::index_in<T, Ts...>());
     this->make<T>(std::forward<Args>(args)...);
-    return detail::value_of<T>(fObject);
+    return value_of<T>(fObject);
   }
   template <std::size_t I, class... Args>
     requires(I < sizeof...(Ts))
@@ -282,10 +266,10 @@ class variant {
   template <class R, bool Deduced, class F>
   constexpr decltype(auto) visit_as(F& f) {
     using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, first&>, R>;
-    detail::held* const object = fObject;  // once, before the dispatch
+    held* const object = fObject;  // once, before the dispatch
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<Out (*)(F&, detail::held*), kSize> table{
-          +[](F& g, detail::held* p) -> Out { return std::invoke(g, detail::value_of<Ts>(p)); }...};
+      static constexpr std::array<Out (*)(F&, held*), kSize> table{
+          +[](F& g, held* p) -> Out { return std::invoke(g, value_of<Ts>(p)); }...};
       if consteval {
         return table[fIndex](f, object);
       } else {
@@ -293,17 +277,17 @@ class variant {
         return opaque[fIndex](f, object);
       }
     } else {
-      auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
+      auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, value_of<T>(object)); };
       return detail::fold_to<Out, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
   template <class R, bool Deduced, class F>
   constexpr decltype(auto) visit_as(F& f) const {
     using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, const first&>, R>;
-    const detail::held* const object = fObject;  // once, before the dispatch
+    const held* const object = fObject;  // once, before the dispatch
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<Out (*)(F&, const detail::held*), kSize> table{
-          +[](F& g, const detail::held* p) -> Out { return std::invoke(g, detail::value_of<Ts>(p)); }...};
+      static constexpr std::array<Out (*)(F&, const held*), kSize> table{
+          +[](F& g, const held* p) -> Out { return std::invoke(g, value_of<Ts>(p)); }...};
       if consteval {
         return table[fIndex](f, object);
       } else {
@@ -311,7 +295,7 @@ class variant {
         return opaque[fIndex](f, object);
       }
     } else {
-      auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
+      auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, value_of<T>(object)); };
       return detail::fold_to<Out, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
@@ -320,44 +304,36 @@ class variant {
   // it (get_if): through the pointer.
   template <class T>
   [[nodiscard]] constexpr T& value() noexcept {
-    return detail::value_of<T>(fObject);
+    return value_of<T>(fObject);
   }
   template <class T>
   [[nodiscard]] constexpr const T& value() const noexcept {
-    return detail::value_of<T>(static_cast<const detail::held*>(fObject));
+    return value_of<T>(static_cast<const held*>(fObject));
   }
 
   template <class T, class... Args>
   constexpr void make(Args&&... args) {
-    if consteval {
-      fObject = new detail::holder<T>(std::in_place, std::forward<Args>(args)...);
-    } else {
-      fObject = ::new (static_cast<void*>(fBuffer)) detail::holder<T>(std::in_place, std::forward<Args>(args)...);
-    }
+    fObject = make_held<T>(fBuffer, std::forward<Args>(args)...);
   }
   // Moving, copying, destroying: given the other's (or own) object as read
   // once before the dispatch, as a visit is.
   template <class T>
-  static constexpr void move_one(variant& to, detail::held* from) {
-    to.template make<T>(std::move(detail::value_of<T>(from)));
+  static constexpr void move_one(variant& to, held* from) {
+    to.template make<T>(std::move(value_of<T>(from)));
   }
   template <class T>
-  static constexpr void copy_one(variant& to, const detail::held* from) {
-    to.template make<T>(detail::value_of<T>(from));
+  static constexpr void copy_one(variant& to, const held* from) {
+    to.template make<T>(value_of<T>(from));
   }
   template <class T>
-  static constexpr void destroy_one(detail::held* object) {
-    if consteval {
-      delete static_cast<detail::holder<T>*>(object);
-    } else {
-      static_cast<detail::holder<T>*>(object)->~holder();
-    }
+  static constexpr void destroy_one(held* object) {
+    destroy_held<T>(object);
   }
   // Each operation for the one held: through its table, or its layer.
   constexpr void move_from(variant& other) {
-    detail::held* const from = other.fObject;
+    held* const from = other.fObject;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<void (*)(variant&, detail::held*), kSize> table{&move_one<Ts>...};
+      static constexpr std::array<void (*)(variant&, held*), kSize> table{&move_one<Ts>...};
       if consteval {
         table[fIndex](*this, from);
       } else {
@@ -370,9 +346,9 @@ class variant {
     }
   }
   constexpr void copy_from(const variant& other) {
-    const detail::held* const from = other.fObject;
+    const held* const from = other.fObject;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<void (*)(variant&, const detail::held*), kSize> table{&copy_one<Ts>...};
+      static constexpr std::array<void (*)(variant&, const held*), kSize> table{&copy_one<Ts>...};
       if consteval {
         table[fIndex](*this, from);
       } else {
@@ -385,9 +361,9 @@ class variant {
     }
   }
   constexpr void destroy() {
-    detail::held* const object = fObject;
+    held* const object = fObject;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<void (*)(detail::held*), kSize> table{&destroy_one<Ts>...};
+      static constexpr std::array<void (*)(held*), kSize> table{&destroy_one<Ts>...};
       if consteval {
         table[fIndex](object);
       } else {
@@ -404,8 +380,8 @@ class variant {
   using index_type = std::conditional_t<(sizeof...(Ts) <= 0xff), std::uint8_t,
                                         std::conditional_t<(sizeof...(Ts) <= 0xffff), std::uint16_t, std::size_t>>;
   index_type fIndex = 0;
-  alignas(detail::holder<Ts>...) unsigned char fBuffer[std::max({sizeof(detail::holder<Ts>)...})];
-  detail::held* fObject = nullptr;
+  alignas(holder<Ts>...) unsigned char fBuffer[std::max({sizeof(holder<Ts>)...})];
+  held* fObject = nullptr;
 };
 
 // As std::get and std::get_if.

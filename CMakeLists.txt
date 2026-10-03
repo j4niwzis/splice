@@ -56,7 +56,7 @@ message(STATUS "splice: fields through ${splice_fields_file}")
 
 add_library(splice)
 target_sources(splice PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/variant.cc src/overloaded.cc src/fields_${splice_fields_file}.cc src/remap.cc src/splice.cc)
+  FILES src/held.cc src/variant.cc src/erased_call.cc src/overloaded.cc src/fields_${splice_fields_file}.cc src/remap.cc src/splice.cc)
 set(splice_depends)
 if(splice_fields STREQUAL "PFR")
   # Boost.PFR, as a module: only where it is what walks the fields.
