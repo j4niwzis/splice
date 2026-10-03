@@ -8,3 +8,4 @@ export import splice.erased_call;
 export import splice.overloaded;
 export import splice.fields;
 export import splice.remap;
+export import splice.bytes;

@@ -14,7 +14,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND NOT DEFINED CMAKE_CXX_
   set(CMAKE_CXX_EXTENSIONS OFF)
 endif()
 
-project(splice VERSION 0.3 LANGUAGES CXX)
+project(splice VERSION 0.4 LANGUAGES CXX)
 
 option(SPLICE_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 option(SPLICE_ERASE "Outside a release build, a variant's alternatives reached through tables of function pointers" ON)
@@ -56,7 +56,7 @@ message(STATUS "splice: fields through ${splice_fields_file}")
 
 add_library(splice)
 target_sources(splice PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/held.cc src/variant.cc src/erased_call.cc src/overloaded.cc src/fields_${splice_fields_file}.cc src/remap.cc src/splice.cc)
+  FILES src/held.cc src/variant.cc src/erased_call.cc src/overloaded.cc src/fields_${splice_fields_file}.cc src/remap.cc src/bytes.cc src/splice.cc)
 set(splice_depends)
 if(splice_fields STREQUAL "PFR")
   # Boost.PFR, as a module: only where it is what walks the fields.
