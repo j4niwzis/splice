@@ -14,7 +14,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND NOT DEFINED CMAKE_CXX_
   set(CMAKE_CXX_EXTENSIONS OFF)
 endif()
 
-project(splice VERSION 0.4 LANGUAGES CXX)
+project(splice VERSION 0.4.1 LANGUAGES CXX)
 
 option(SPLICE_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 option(SPLICE_ERASE "Outside a release build, a variant's alternatives reached through tables of function pointers" ON)

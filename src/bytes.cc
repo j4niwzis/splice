@@ -22,15 +22,15 @@ export namespace splice::bytes {
 // Text in lower case, as ASCII has it -- what a case-blind match folds:
 // lazily, nothing copied; and as a string, where one is kept.
 inline constexpr auto lower_of = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
-[[nodiscard]] constexpr auto lowered(std::string_view text) { return text | std::views::transform(lower_of); }
-inline constexpr auto lower_text = [](std::string_view text) { return lowered(text) | std::ranges::to<std::string>(); };
+[[nodiscard]] constexpr auto lowered(std::string_view text) { return std::views::transform(text, lower_of); }
+inline constexpr auto lower_text = [](std::string_view text) { return std::ranges::to<std::string>(lowered(text)); };
 // And made a key: a letter or digit in lower case, anything else '_'.
 inline constexpr auto key_text = [](std::string_view text) {
   const auto key_of = [](char c) {
     const char low = lower_of(c);
     return (low >= 'a' && low <= 'z') || (low >= '0' && low <= '9') ? low : '_';
   };
-  return text | std::views::transform(key_of) | std::ranges::to<std::string>();
+  return std::ranges::to<std::string>(std::views::transform(text, key_of));
 };
 
 inline constexpr auto to_byte = [](char c) { return std::bit_cast<std::uint8_t>(c); };
@@ -40,25 +40,27 @@ inline constexpr auto to_char = [](std::uint8_t b) { return std::bit_cast<char>(
 template <std::ranges::viewable_range Chars>
   requires std::same_as<std::ranges::range_value_t<Chars>, char>
 [[nodiscard]] constexpr auto of(Chars&& chars) {
-  return std::views::all(std::forward<Chars>(chars)) | std::views::transform(to_byte);
+  return std::views::transform(std::forward<Chars>(chars), to_byte);
 }
-[[nodiscard]] constexpr auto of(std::string_view text) { return text | std::views::transform(to_byte); }
+[[nodiscard]] constexpr auto of(std::string_view text) { return std::views::transform(text, to_byte); }
 
 // Any bytes as characters.
 template <std::ranges::viewable_range Bytes>
   requires std::same_as<std::ranges::range_value_t<Bytes>, std::uint8_t>
 [[nodiscard]] constexpr auto chars(Bytes&& bytes) {
-  return std::views::all(std::forward<Bytes>(bytes)) | std::views::transform(to_char);
+  return std::views::transform(std::forward<Bytes>(bytes), to_char);
 }
 
 // Made whole, where something keeps them: a string, a byte buffer.
+// Call the range adaptors and to() directly: libstdc++'s pipe operators can
+// be hidden when templates are instantiated in a module importing this one.
 template <std::ranges::input_range Bytes>
 [[nodiscard]] constexpr std::string text_of(Bytes&& bytes) {
-  return chars(std::forward<Bytes>(bytes)) | std::ranges::to<std::string>();
+  return std::ranges::to<std::string>(chars(std::forward<Bytes>(bytes)));
 }
 template <std::ranges::input_range Bytes>
 [[nodiscard]] constexpr std::vector<std::uint8_t> buffer_of(Bytes&& bytes) {
-  return std::forward<Bytes>(bytes) | std::ranges::to<std::vector<std::uint8_t>>();
+  return std::ranges::to<std::vector<std::uint8_t>>(std::forward<Bytes>(bytes));
 }
 
 // Bytes handed to something that takes them a piece at a time -- a hash, a
@@ -171,30 +173,29 @@ template <std::ranges::viewable_range Bytes>
 // of a key file, groups of a recovery key -- lazily, nothing allocated.
 template <std::ranges::viewable_range Chars>
 [[nodiscard]] constexpr auto every(Chars&& chars, std::size_t n, char separator) {
-  return std::views::all(std::forward<Chars>(chars)) | std::views::enumerate |
-         std::views::transform([n, separator](auto pair) {
+  return std::views::join(std::views::transform(
+         std::views::enumerate(std::forward<Chars>(chars)), [n, separator](auto pair) {
            const auto [index, c] = pair;
            const bool starts = index > 0 && static_cast<std::size_t>(index) % n == 0;
            return std::views::drop(std::views::all(std::array<char, 2>{separator, static_cast<char>(c)}), starts ? 0 : 1);
-         }) |
-         std::views::join;
+         }));
 }
 // Made whole, where a field keeps it.
 template <std::ranges::viewable_range Bytes>
 [[nodiscard]] constexpr std::string base64_text(Bytes&& bytes) {
-  return base64(std::forward<Bytes>(bytes)) | std::ranges::to<std::string>();
+  return std::ranges::to<std::string>(base64(std::forward<Bytes>(bytes)));
 }
 template <std::ranges::viewable_range Bytes>
 [[nodiscard]] constexpr std::string base64_padded_text(Bytes&& bytes) {
-  return base64_padded(std::forward<Bytes>(bytes)) | std::ranges::to<std::string>();
+  return std::ranges::to<std::string>(base64_padded(std::forward<Bytes>(bytes)));
 }
 
 [[nodiscard]] inline std::string text_of_terminated(const std::uint8_t* bytes) {
   if (bytes == nullptr)
     return {};
-  return std::ranges::subrange(bytes, std::unreachable_sentinel) |
-         std::views::take_while([](std::uint8_t b) { return b != 0; }) | std::views::transform(to_char) |
-         std::ranges::to<std::string>();
+  return std::ranges::to<std::string>(std::views::transform(
+      std::views::take_while(std::ranges::subrange(bytes, std::unreachable_sentinel),
+                            [](std::uint8_t b) { return b != 0; }), to_char));
 }
 
 }  // namespace splice::bytes
