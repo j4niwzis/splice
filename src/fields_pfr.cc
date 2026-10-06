@@ -8,11 +8,11 @@ export module splice.fields;
 import std;
 import boost.pfr;
 
-export namespace splice {
+export namespace spl {
 
 template <class Aggregate>
 [[nodiscard]] constexpr auto fields_of(Aggregate& value) {
   return boost::pfr::structure_tie(value);
 }
 
-}  // namespace splice
+}  // namespace spl

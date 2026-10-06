@@ -5,7 +5,7 @@
 //
 //   struct window_needs { actions* ask; const palette* colours; speaker* sound; };
 //   struct row_needs { const palette* colours; speaker* sound; };
-//   const row_needs mine = splice::remapped<row_needs>(given);
+//   const row_needs mine = spl::remapped<row_needs>(given);
 //
 // Each field of `To` is taken from the field of `from` of its type. The
 // match is overload resolution -- one overload for each of `from`'s fields,
@@ -17,7 +17,7 @@ import std;
 import splice.fields;
 import splice.overloaded;
 
-export namespace splice {
+export namespace spl {
 
 // A type, carried as a value: what a field is asked for by.
 template <class T>
@@ -36,4 +36,4 @@ template <class To, class From>
       fields_of(from));
 }
 
-}  // namespace splice
+}  // namespace spl

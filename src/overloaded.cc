@@ -2,12 +2,12 @@
 // splice.overloaded -- A visitor made of several callables: one for each
 // alternative, or a generic one for the rest.
 //
-//   splice::visit(splice::overloaded{[](const text&) { ... },
+//   spl::visit(spl::overloaded{[](const text&) { ... },
 //                                    [](const picture&) { ... }},
 //                 message);
 export module splice.overloaded;
 
-export namespace splice {
+export namespace spl {
 
 template <class... Fs>
 struct overloaded : Fs... {
@@ -16,4 +16,4 @@ struct overloaded : Fs... {
 template <class... Fs>
 overloaded(Fs...) -> overloaded<Fs...>;
 
-}  // namespace splice
+}  // namespace spl

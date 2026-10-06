@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // splice.held -- An object of a type said only where it is made, held in
-// storage of its holder's: what splice::variant holds its alternative in,
-// and splice::erased_call its call.
+// storage of its holder's: what spl::variant holds its alternative in,
+// and spl::erased_call its call.
 //
 // The object is held in a holder<T>, derived from one empty base, held, the
 // pointer to it kept as: a base pointer cast down to its holder is a
@@ -13,7 +13,7 @@ export module splice.held;
 
 import std;
 
-export namespace splice {
+export namespace spl {
 
 // What every holder derives from: one base for the pointer, empty.
 struct held {};
@@ -53,4 +53,4 @@ constexpr void destroy_held(held* object) {
   }
 }
 
-}  // namespace splice
+}  // namespace spl

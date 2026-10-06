@@ -8,7 +8,7 @@ export module splice.bytes;
 
 import std;
 
-export namespace splice::bytes {
+export namespace spl::bytes {
 
 // What a file holds, whole: none where it cannot be opened. Whole, as its
 // readers keep it or hand a pointer to it on (a decoder, a parser).
@@ -198,4 +198,4 @@ template <std::ranges::viewable_range Bytes>
                             [](std::uint8_t b) { return b != 0; }), to_char));
 }
 
-}  // namespace splice::bytes
+}  // namespace spl::bytes

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // splice.erased_call -- A call, whatever it is: std::function's use, held
-// as splice::variant holds its alternative (splice.held) -- in a buffer of
+// as spl::variant holds its alternative (splice.held) -- in a buffer of
 // its own at run time, never on the heap; allocated in constant evaluation,
 // where it is a constant expression too.
 //
@@ -14,7 +14,7 @@ export module splice.erased_call;
 import std;
 import splice.held;
 
-export namespace splice {
+export namespace spl {
 
 template <class Signature, std::size_t Capacity = 3 * sizeof(void*)>
 class erased_call;
@@ -87,4 +87,4 @@ private:
   alignas(std::max_align_t) unsigned char fBuffer[Capacity];
 };
 
-}  // namespace splice
+}  // namespace spl

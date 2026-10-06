@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// splice::variant and splice::overloaded: made, moved, copied, compared and
+// spl::variant and spl::overloaded: made, moved, copied, compared and
 // visited -- at run time, and as constant expressions.
 import std;
 import splice;
@@ -21,7 +21,7 @@ struct picture {
 struct nothing {
   friend auto operator<=>(nothing, nothing) = default;
 };
-using message = splice::variant<text, picture, nothing>;
+using message = spl::variant<text, picture, nothing>;
 
 // A tree: a node holding a variant of a vector of itself, declared while
 // the node is incomplete.
@@ -30,7 +30,7 @@ struct branch {
   std::vector<node> children;
 };
 struct node {
-  splice::variant<branch, std::string> held;
+  spl::variant<branch, std::string> held;
 };
 
 // How many times each was made and destroyed: that a variant destroys what
@@ -46,7 +46,7 @@ struct counted {
 };
 
 constexpr std::string kind_of(const message& one) {
-  return splice::visit(splice::overloaded{[](const text&) { return std::string("text"); },
+  return spl::visit(spl::overloaded{[](const text&) { return std::string("text"); },
                                           [](const picture&) { return std::string("picture"); },
                                           [](nothing) { return std::string("nothing"); }},
                        one);
@@ -66,35 +66,35 @@ TEST(Variant, HoldsWhatItWasMadeWith) {
   ASSERT_NE(one.get_if<picture>(), nullptr);
   EXPECT_EQ(one.get_if<picture>()->width, 3);
   EXPECT_EQ(one.get_if<text>(), nullptr);
-  EXPECT_EQ(splice::get<picture>(one).height, 4);
-  EXPECT_EQ(splice::get<1>(one).height, 4);
-  EXPECT_THROW((void)splice::get<text>(one), std::bad_variant_access);
+  EXPECT_EQ(spl::get<picture>(one).height, 4);
+  EXPECT_EQ(spl::get<1>(one).height, 4);
+  EXPECT_THROW((void)spl::get<text>(one), std::bad_variant_access);
 }
 
 TEST(Variant, HoldsATreeOfItself) {
   node root;
-  splice::get<branch>(root.held).children.push_back(node{std::string("leaf")});
-  splice::get<branch>(root.held).children.push_back(node{});
+  spl::get<branch>(root.held).children.push_back(node{std::string("leaf")});
+  spl::get<branch>(root.held).children.push_back(node{});
   node copy = root;
-  EXPECT_EQ(splice::get<branch>(copy.held).children.size(), 2u);
-  EXPECT_EQ(splice::get<std::string>(splice::get<branch>(copy.held).children[0].held), "leaf");
+  EXPECT_EQ(spl::get<branch>(copy.held).children.size(), 2u);
+  EXPECT_EQ(spl::get<std::string>(spl::get<branch>(copy.held).children[0].held), "leaf");
 }
 
 TEST(Variant, GetIfByIndex) {
   message one = picture{5, 6};
-  ASSERT_NE(splice::get_if<1>(&one), nullptr);
-  EXPECT_EQ(splice::get_if<1>(&one)->width, 5);
-  EXPECT_EQ(splice::get_if<0>(&one), nullptr);
+  ASSERT_NE(spl::get_if<1>(&one), nullptr);
+  EXPECT_EQ(spl::get_if<1>(&one)->width, 5);
+  EXPECT_EQ(spl::get_if<0>(&one), nullptr);
   const message& same = one;
-  EXPECT_EQ(splice::get_if<1>(&same)->height, 6);
-  EXPECT_TRUE(splice::holds_alternative<picture>(same));
+  EXPECT_EQ(spl::get_if<1>(&same)->height, 6);
+  EXPECT_TRUE(spl::holds_alternative<picture>(same));
 }
 
 TEST(Variant, MemberVisit) {
   message one = text{"hi"};
-  one.visit(splice::overloaded{[](text& t) { t.said += "!"; }, [](auto&) {}});
-  EXPECT_EQ(splice::get<text>(one).said, "hi!");
-  EXPECT_EQ(one.visit<int>(splice::overloaded{[](const text& t) { return static_cast<int>(t.said.size()); },
+  one.visit(spl::overloaded{[](text& t) { t.said += "!"; }, [](auto&) {}});
+  EXPECT_EQ(spl::get<text>(one).said, "hi!");
+  EXPECT_EQ(one.visit<int>(spl::overloaded{[](const text& t) { return static_cast<int>(t.said.size()); },
                                               [](const auto&) { return -1; }}),
             3);
 }
@@ -127,9 +127,9 @@ TEST(Variant, Ordered) {
 
 TEST(Variant, DestroysWhatItMakes) {
   {
-    splice::variant<counted, int> one;
+    spl::variant<counted, int> one;
     EXPECT_EQ(counted::alive, 1);
-    splice::variant<counted, int> two = one;
+    spl::variant<counted, int> two = one;
     EXPECT_EQ(counted::alive, 2);
     two = 5;
     EXPECT_EQ(counted::alive, 1);
@@ -141,9 +141,9 @@ TEST(Variant, DestroysWhatItMakes) {
 
 TEST(Variant, VisitsSeveralAtOnce) {
   const message a = text{"x"};
-  const splice::variant<int, double> b = 2.5;
+  const spl::variant<int, double> b = 2.5;
   const std::variant<char, bool> c = true;
-  const auto said = splice::visit(
+  const auto said = spl::visit(
       []<class A, class B, class C>(const A&, const B&, const C&) {
         return std::string(typeid(A) == typeid(text) ? "text" : "?") + (std::same_as<B, double> ? "/double" : "/?") +
                (std::same_as<C, bool> ? "/bool" : "/?");
@@ -158,7 +158,7 @@ static_assert([] {
   message other = one;
   other = text{"made at compile time"};
   return kind_of(one) == "picture" && kind_of(other) == "text" && one != other &&
-         splice::get<text>(other).said.size() == 20;
+         spl::get<text>(other).said.size() == 20;
 }());
-static_assert(splice::variant_size_v<message> == 3);
-static_assert(std::same_as<splice::variant_alternative_t<1, message>, picture>);
+static_assert(spl::variant_size_v<message> == 3);
+static_assert(std::same_as<spl::variant_alternative_t<1, message>, picture>);

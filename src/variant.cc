@@ -31,7 +31,7 @@ export module splice.variant;
 import std;
 import splice.held;
 
-namespace splice::detail {
+namespace spl::detail {
 // Whether alternatives are found through tables (outside a release build):
 // CMake says which build this is; C++ cannot see it.
 #ifdef SPLICE_ERASED
@@ -97,9 +97,9 @@ consteval std::size_t index_in() {
 }
 template <class T, class... Ts>
 concept one_of = (std::same_as<T, Ts> || ...);
-}  // namespace splice::detail
+}  // namespace spl::detail
 
-export namespace splice {
+export namespace spl {
 
 template <class... Ts>
 class variant;
@@ -399,11 +399,11 @@ template <class T, class... Ts>
 }
 template <std::size_t I, class... Ts>
 [[nodiscard]] constexpr auto& get(variant<Ts...>& v) {
-  return splice::get<std::tuple_element_t<I, std::tuple<Ts...>>>(v);
+  return spl::get<std::tuple_element_t<I, std::tuple<Ts...>>>(v);
 }
 template <std::size_t I, class... Ts>
 [[nodiscard]] constexpr const auto& get(const variant<Ts...>& v) {
-  return splice::get<std::tuple_element_t<I, std::tuple<Ts...>>>(v);
+  return spl::get<std::tuple_element_t<I, std::tuple<Ts...>>>(v);
 }
 template <class T, class... Ts>
 [[nodiscard]] constexpr T* get_if(variant<Ts...>* v) noexcept {
@@ -448,15 +448,15 @@ constexpr decltype(auto) visit_one(std::variant<Ts...>&& v, F&& f) {
 }
 template <class F, class V>
 constexpr decltype(auto) visit(F&& f, V&& v) {
-  return splice::visit_one(std::forward<V>(v), std::forward<F>(f));
+  return spl::visit_one(std::forward<V>(v), std::forward<F>(f));
 }
 template <class F, class V, class W, class... More>
 constexpr decltype(auto) visit(F&& f, V&& v, W&& w, More&&... more) {
-  return splice::visit_one(std::forward<V>(v), [&](auto&& one) -> decltype(auto) {
-    return splice::visit([&](auto&&... rest) -> decltype(auto) {
+  return spl::visit_one(std::forward<V>(v), [&](auto&& one) -> decltype(auto) {
+    return spl::visit([&](auto&&... rest) -> decltype(auto) {
       return std::invoke(f, std::forward<decltype(one)>(one), std::forward<decltype(rest)>(rest)...);
     }, std::forward<W>(w), std::forward<More>(more)...);
   });
 }
 
-}  // namespace splice
+}  // namespace spl

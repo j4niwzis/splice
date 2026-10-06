@@ -1,6 +1,6 @@
 # The fold dispatch, and why it assumes its index
 
-`splice::variant` finds the alternative it holds, in an optimised build, by
+`spl::variant` finds the alternative it holds, in an optimised build, by
 one fold over the alternatives in one function (`detail::fold_to`):
 
 ```cpp

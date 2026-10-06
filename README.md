@@ -8,16 +8,16 @@ import splice;
 
 struct text { std::string said; };
 struct picture { int width, height; };
-using message = splice::variant<text, picture>;
+using message = spl::variant<text, picture>;
 
 std::string kind(const message& one) {
-  return splice::visit(splice::overloaded{[](const text&) { return "text"; },
+  return spl::visit(spl::overloaded{[](const text&) { return "text"; },
                                           [](const picture&) { return "picture"; }},
                        one);
 }
 ```
 
-- **`splice::variant`** -- `std::variant`'s interface (index, `get`, `get_if`,
+- **`spl::variant`** -- `std::variant`'s interface (index, `get`, `get_if`,
   `holds_alternative`, `emplace`, comparisons, C++26's member `visit`), built
   in time linear in how many alternatives it has: an index, a buffer as large
   as the largest, and a pointer to the object in it. libc++ nests a variant as
@@ -27,8 +27,8 @@ std::string kind(const message& one) {
   reached through tables of function pointers, so that only the tables are
   made; in one, by halving the index, which the optimiser lays out as a jump.
   Everything is `constexpr`.
-- **`splice::visit`** -- over one or more variants, splice's or std's.
-- **`splice::overloaded`** -- a visitor made of several callables.
+- **`spl::visit`** -- over one or more variants, splice's or std's.
+- **`spl::overloaded`** -- a visitor made of several callables.
 
 `docs/missed-optimisation-argument-promotion.md`: why the variant reads its
 object's pointer once before each dispatch.

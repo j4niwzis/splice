@@ -7,7 +7,7 @@ export module splice.fields;
 
 import std;
 
-export namespace splice {
+export namespace spl {
 
 template <class Aggregate>
 [[nodiscard]] constexpr auto fields_of(Aggregate& value) {
@@ -15,4 +15,4 @@ template <class Aggregate>
   return std::tie(field...);
 }
 
-}  // namespace splice
+}  // namespace spl

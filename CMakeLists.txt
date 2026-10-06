@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 4.3.4 FATAL_ERROR)
 
-# splice: what the libraries of the family share -- splice::variant, a
-# variant built in time linear in its alternatives, splice::overloaded, and
-# splice::remapped, one aggregate made of another's fields -- as C++
+# splice: what the libraries of the family share -- spl::variant, a
+# variant built in time linear in its alternatives, spl::overloaded, and
+# spl::remapped, one aggregate made of another's fields -- as C++
 # modules, for C++23 and later.
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/import-std.cmake)
 # C++23 is all splice needs, and the standard is the one of what imports it:
@@ -71,7 +71,7 @@ target_compile_options(splice PUBLIC
 # build's time, not the program's.
 target_compile_definitions(splice PUBLIC
   $<$<AND:$<BOOL:${SPLICE_ERASE}>,$<NOT:$<CONFIG:Release>>>:SPLICE_ERASED>)
-add_library(splice::splice ALIAS splice)
+add_library(spl::splice ALIAS splice)
 
 # ---- What this library is, said by the library ----
 #
@@ -89,14 +89,14 @@ if(COMMAND cme_declare_port)
     GIT_TAG main
     LICENSE GPL-3.0-only
     ${splice_depends}
-    TARGETS splice::splice)
+    TARGETS spl::splice)
 endif()
 
 # ---- Installing it ----
 #
 # The library, its module interface units -- a consumer compiles its own
 # binary interfaces from them -- and a package, so that find_package(splice)
-# on a machine that has it installed finds it there, as splice::splice: what
+# on a machine that has it installed finds it there, as spl::splice: what
 # the libraries of the family link, here and from a prefix alike.
 option(SPLICE_INSTALL "Install splice and its CMake package" ${PROJECT_IS_TOP_LEVEL})
 if(SPLICE_INSTALL)
