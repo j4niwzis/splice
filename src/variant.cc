@@ -40,29 +40,6 @@ inline constexpr bool kVariantTables = true;
 inline constexpr bool kVariantTables = false;
 #endif
 
-// The onion: the alternatives folded into one nested type by `|`, walked a
-// layer at a time.
-struct core {};
-template <class T, class Rest>
-struct layer {};
-template <class T>
-struct peel {};
-template <class T, class Rest>
-constexpr layer<T, Rest> operator|(peel<T>, Rest) noexcept {
-  return {};
-}
-// `f` given the type of the one at `index`: the last layer, as it is; any
-// other, as it is where the index is 0, else the rest a layer further in.
-template <class F, class T>
-constexpr decltype(auto) peel_to(layer<T, core>, std::size_t, F& f) {
-  return f(std::type_identity<T>{});
-}
-template <class F, class T, class Rest>
-constexpr decltype(auto) peel_to(layer<T, Rest>, std::size_t index, F& f) {
-  if (index == 0)
-    return f(std::type_identity<T>{});
-  return peel_to(Rest{}, index - 1, f);
-}
 // `f` given the type of the one at `index`: a fold of index == I over the
 // alternatives, in this one function -- what it gives back, none, a
 // reference or a value (kept in an optional: it may have no default).
@@ -246,8 +223,6 @@ class variant {
   }
 
  private:
-  using onion = decltype((detail::peel<Ts>{} | ... | detail::core{}));
-
   // How the object is reached, at runtime: through fObject, read ONCE, before
   // the dispatch, and that pointer handed to whichever arm runs. Read inside
   // each arm instead, the load is conditional; clang's ArgumentPromotion,
