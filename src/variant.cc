@@ -138,16 +138,20 @@ class variant {
   constexpr explicit variant(std::in_place_index_t<I>, Args&&... args) : fIndex(static_cast<index_type>(I)) {
     this->make<std::tuple_element_t<I, std::tuple<Ts...>>>(std::forward<Args>(args)...);
   }
-  constexpr variant(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Ts> && ...)) { this->move_from(other); }
-  constexpr variant(const variant& other) { this->copy_from(other); }
-  constexpr variant& operator=(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Ts> && ...)) {
+  constexpr variant(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Ts> && ...))
+    requires (std::is_move_constructible_v<Ts> && ...) { this->move_from(other); }
+  constexpr variant(const variant& other)
+    requires (std::is_copy_constructible_v<Ts> && ...) { this->copy_from(other); }
+  constexpr variant& operator=(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Ts> && ...))
+    requires (std::is_move_constructible_v<Ts> && ...) {
     if (this != &other) {
       this->destroy();
       this->move_from(other);
     }
     return *this;
   }
-  constexpr variant& operator=(const variant& other) {
+  constexpr variant& operator=(const variant& other)
+    requires (std::is_copy_constructible_v<Ts> && ...) {
     if (this != &other) {
       this->destroy();
       this->copy_from(other);

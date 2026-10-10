@@ -31,6 +31,9 @@ std::string kind(const message& one) {
   returns `std::variant_npos`, `get_if` returns null, and `get` and `visit`
   throw `std::bad_variant_access`. It can be assigned or emplaced again;
   valueless variants compare equal and order before variants holding a value.
+  Copy and move construction and assignment are available only when every
+  alternative supports the corresponding construction. Move-only alternatives
+  remain usable in containers even when their moves can throw.
   Moves and swaps are `noexcept` only when every alternative's move
   construction is nonthrowing.
 - **`spl::visit`** -- over one or more variants, splice's or std's.

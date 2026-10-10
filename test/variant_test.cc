@@ -23,6 +23,36 @@ struct nothing {
 };
 using message = spl::variant<text, picture, nothing>;
 
+// UI nodes are move-only and their moves can throw. Containers must see
+// that copying their variant is unavailable and relocate it by moving.
+struct move_only {
+  std::unique_ptr<int> value;
+  explicit move_only(int n) : value(std::make_unique<int>(n)) {}
+  move_only(const move_only&) = delete;
+  move_only& operator=(const move_only&) = delete;
+  move_only(move_only&& other) noexcept(false) : value(std::move(other.value)) {}
+  move_only& operator=(move_only&&) = delete;
+};
+using move_only_variant = spl::variant<int, move_only>;
+static_assert(!std::is_copy_constructible_v<move_only_variant>);
+static_assert(!std::is_copy_assignable_v<move_only_variant>);
+static_assert(std::is_move_constructible_v<move_only_variant>);
+static_assert(std::is_move_assignable_v<move_only_variant>);
+static_assert(!std::is_nothrow_move_constructible_v<move_only_variant>);
+static_assert(std::same_as<decltype(std::move_if_noexcept(std::declval<move_only_variant&>())), move_only_variant&&>);
+struct immovable {
+  immovable() = default;
+  immovable(const immovable&) = delete;
+  immovable(immovable&&) = delete;
+};
+using immovable_variant = spl::variant<int, immovable>;
+static_assert(!std::is_copy_constructible_v<immovable_variant>);
+static_assert(!std::is_copy_assignable_v<immovable_variant>);
+static_assert(!std::is_move_constructible_v<immovable_variant>);
+static_assert(!std::is_move_assignable_v<immovable_variant>);
+static_assert(std::is_copy_constructible_v<message>);
+static_assert(std::is_copy_assignable_v<message>);
+
 // A tree: a node holding a variant of a vector of itself, declared while
 // the node is incomplete.
 struct node;
@@ -292,4 +322,17 @@ TEST(Variant, CopiesMovesComparesAndSwapsValuelessObjects) {
   empty = std::move(empty);
   empty.swap(empty);
   EXPECT_EQ(spl::get<int>(empty), 4);
+}
+
+TEST(Variant, VectorReallocationMovesNoncopyableAlternativesEvenWhenMoveCanThrow) {
+  std::vector<move_only_variant> rows;
+  rows.reserve(1);
+  rows.emplace_back(std::in_place_type<move_only>, 42);
+  rows.reserve(8);
+  EXPECT_EQ(*spl::get<move_only>(rows[0]).value, 42);
+  rows.emplace_back(7);
+  move_only_variant destination = 0;
+  destination = std::move(rows[0]);
+  EXPECT_EQ(*spl::get<move_only>(destination).value, 42);
+  EXPECT_EQ(spl::get<int>(rows[1]), 7);
 }
