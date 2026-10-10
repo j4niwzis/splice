@@ -45,6 +45,38 @@ struct counted {
   ~counted() { --alive; }
 };
 
+// Fail before a new object's lifetime starts; count only completed objects.
+struct throwing {
+  enum class failure { none, construct, copy, move };
+  static inline failure fail = failure::none;
+  static inline int alive = 0;
+  int value = 0;
+  explicit throwing(int n = 0) : value(n) {
+    if (fail == failure::construct)
+      throw std::runtime_error("construct");
+    ++alive;
+  }
+  throwing(const throwing& other) : value(other.value) {
+    if (fail == failure::copy)
+      throw std::runtime_error("copy");
+    ++alive;
+  }
+  throwing(throwing&& other) : value(other.value) {
+    if (fail == failure::move)
+      throw std::runtime_error("move");
+    ++alive;
+  }
+  ~throwing() { --alive; }
+  friend auto operator<=>(const throwing&, const throwing&) = default;
+};
+using fallible = spl::variant<int, throwing>;
+static_assert(!std::is_nothrow_move_constructible_v<fallible>);
+static_assert(!std::is_nothrow_move_assignable_v<fallible>);
+static_assert(!noexcept(std::declval<fallible&>().swap(std::declval<fallible&>())));
+static_assert(std::is_nothrow_move_constructible_v<spl::variant<int, double>>);
+static_assert(std::is_nothrow_move_assignable_v<spl::variant<int, double>>);
+static_assert(noexcept(std::declval<message&>().swap(std::declval<message&>())));
+
 constexpr std::string kind_of(const message& one) {
   return spl::visit(spl::overloaded{[](const text&) { return std::string("text"); },
                                           [](const picture&) { return std::string("picture"); },
@@ -162,3 +194,102 @@ static_assert([] {
 }());
 static_assert(spl::variant_size_v<message> == 3);
 static_assert(std::same_as<spl::variant_alternative_t<1, message>, picture>);
+
+TEST(Variant, FailedEmplaceIsValuelessAndCanRecover) {
+  {
+    fallible one(std::in_place_type<throwing>, 7);
+    EXPECT_EQ(throwing::alive, 1);
+    throwing::fail = throwing::failure::construct;
+    EXPECT_THROW(one.emplace<throwing>(9), std::runtime_error);
+    throwing::fail = throwing::failure::none;
+    EXPECT_EQ(throwing::alive, 0);
+    EXPECT_TRUE(one.valueless_by_exception());
+    EXPECT_EQ(one.index(), std::variant_npos);
+    EXPECT_EQ(one.get_if<int>(), nullptr);
+    EXPECT_EQ(one.get_if<throwing>(), nullptr);
+    EXPECT_FALSE(spl::holds_alternative<throwing>(one));
+    EXPECT_THROW((void)spl::get<int>(one), std::bad_variant_access);
+    EXPECT_THROW(one.visit([](auto&) {}), std::bad_variant_access);
+    const fallible& same = one;
+    EXPECT_EQ(spl::get_if<0>(&same), nullptr);
+    EXPECT_THROW(same.visit<int>([](const auto&) { return 0; }), std::bad_variant_access);
+    fallible other = 3;
+    EXPECT_THROW(spl::visit([](auto&, auto&) {}, other, one), std::bad_variant_access);
+    one.emplace<throwing>(11);
+    EXPECT_FALSE(one.valueless_by_exception());
+    EXPECT_EQ(spl::get<throwing>(one).value, 11);
+  }
+  EXPECT_EQ(throwing::alive, 0);
+}
+
+TEST(Variant, ThrowingCopyLeavesSafeDestination) {
+  {
+    fallible source(std::in_place_type<throwing>, 7);
+    fallible destination(std::in_place_type<throwing>, 8);
+    throwing::fail = throwing::failure::copy;
+    EXPECT_THROW(destination = source, std::runtime_error);
+    EXPECT_THROW((void)fallible(source), std::runtime_error);
+    EXPECT_THROW(destination = spl::get<throwing>(source), std::runtime_error);
+    throwing::fail = throwing::failure::none;
+    EXPECT_TRUE(destination.valueless_by_exception());
+    EXPECT_EQ(throwing::alive, 1);
+    EXPECT_EQ(spl::get<throwing>(source).value, 7);
+    destination = source;
+    EXPECT_EQ(throwing::alive, 2);
+    EXPECT_EQ(destination, source);
+  }
+  EXPECT_EQ(throwing::alive, 0);
+}
+
+TEST(Variant, ThrowingMovePropagatesAndLeavesSafeDestination) {
+  {
+    fallible source(std::in_place_type<throwing>, 7);
+    fallible destination(std::in_place_type<throwing>, 8);
+    throwing::fail = throwing::failure::move;
+    EXPECT_THROW(destination = std::move(source), std::runtime_error);
+    EXPECT_THROW((void)fallible(std::move(source)), std::runtime_error);
+    EXPECT_THROW(destination.swap(source), std::runtime_error);
+    throwing::fail = throwing::failure::none;
+    EXPECT_TRUE(destination.valueless_by_exception());
+    EXPECT_EQ(throwing::alive, 1);
+    destination = std::move(source);
+    EXPECT_EQ(throwing::alive, 2);
+  }
+  EXPECT_EQ(throwing::alive, 0);
+}
+
+TEST(Variant, CopiesMovesComparesAndSwapsValuelessObjects) {
+  fallible empty = 1;
+  throwing::fail = throwing::failure::construct;
+  EXPECT_THROW(empty.emplace<throwing>(), std::runtime_error);
+  throwing::fail = throwing::failure::none;
+  fallible copy = empty;
+  fallible moved = std::move(empty);
+  EXPECT_TRUE(empty.valueless_by_exception());
+  EXPECT_EQ(copy, moved);
+  EXPECT_EQ(copy <=> moved, std::strong_ordering::equal);
+  fallible value = 2;
+  EXPECT_NE(empty, value);
+  EXPECT_LT(empty, value);
+  EXPECT_GT(value, empty);
+  value = empty;
+  EXPECT_TRUE(value.valueless_by_exception());
+  value = 3;
+  value = std::move(empty);
+  EXPECT_TRUE(value.valueless_by_exception());
+  value = 4;
+  empty.swap(value);
+  EXPECT_EQ(spl::get<int>(empty), 4);
+  EXPECT_TRUE(value.valueless_by_exception());
+  value.swap(copy);
+  EXPECT_TRUE(value.valueless_by_exception());
+  EXPECT_TRUE(copy.valueless_by_exception());
+  copy = copy;
+  copy = std::move(copy);
+  copy.swap(copy);
+  EXPECT_TRUE(copy.valueless_by_exception());
+  empty = empty;
+  empty = std::move(empty);
+  empty.swap(empty);
+  EXPECT_EQ(spl::get<int>(empty), 4);
+}

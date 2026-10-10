@@ -27,6 +27,27 @@ struct tracked {
   void operator()() const { ++*calls; }
 };
 
+struct throwing_call {
+  static inline bool fail_copy = false;
+  static inline bool fail_move = false;
+  static inline int alive = 0;
+  throwing_call() { ++alive; }
+  throwing_call(const throwing_call&) {
+    if (fail_copy)
+      throw std::runtime_error("copy");
+    ++alive;
+  }
+  throwing_call(throwing_call&&) {
+    if (fail_move)
+      throw std::runtime_error("move");
+    ++alive;
+  }
+  ~throwing_call() { --alive; }
+  int operator()(int n) const { return n + 1; }
+};
+static_assert(!std::is_nothrow_move_constructible_v<spl::erased_call<int(int)>>);
+static_assert(!std::is_nothrow_move_assignable_v<spl::erased_call<int(int)>>);
+
 // In constant evaluation: made, called, copied, moved, assigned, emptied.
 constexpr int in_constant_evaluation() {
   spl::erased_call<int(int)> add{adds{2}};
@@ -83,6 +104,43 @@ TEST(erased_call, assigned_over_another) {
   EXPECT_EQ(one(2), 6);
   one = spl::erased_call<int(int)>{};
   EXPECT_FALSE(one.holds());
+}
+
+TEST(erased_call, failed_copy_leaves_an_empty_reusable_call) {
+  {
+    spl::erased_call<int(int)> source{throwing_call{}};
+    spl::erased_call<int(int)> destination{throwing_call{}};
+    throwing_call::fail_copy = true;
+    EXPECT_THROW(destination = source, std::runtime_error);
+    EXPECT_THROW((void)spl::erased_call<int(int)>(source), std::runtime_error);
+    throwing_call::fail_copy = false;
+    EXPECT_EQ(throwing_call::alive, 1);
+    EXPECT_FALSE(destination.holds());
+    EXPECT_EQ(destination(3), 0);
+    EXPECT_EQ(source(3), 4);
+    destination = source;
+    EXPECT_TRUE(destination.holds());
+    EXPECT_EQ(destination(3), 4);
+  }
+  EXPECT_EQ(throwing_call::alive, 0);
+}
+
+TEST(erased_call, failed_move_propagates_and_leaves_an_empty_call) {
+  {
+    spl::erased_call<int(int)> source{throwing_call{}};
+    spl::erased_call<int(int)> destination{throwing_call{}};
+    throwing_call::fail_move = true;
+    EXPECT_THROW(destination = std::move(source), std::runtime_error);
+    EXPECT_THROW((void)spl::erased_call<int(int)>(std::move(source)), std::runtime_error);
+    throwing_call::fail_move = false;
+    EXPECT_EQ(throwing_call::alive, 1);
+    EXPECT_FALSE(destination.holds());
+    EXPECT_EQ(destination(3), 0);
+    destination = std::move(source);
+    EXPECT_TRUE(destination.holds());
+    EXPECT_EQ(destination(3), 4);
+  }
+  EXPECT_EQ(throwing_call::alive, 0);
 }
 
 }  // namespace

@@ -138,12 +138,11 @@ class variant {
   constexpr explicit variant(std::in_place_index_t<I>, Args&&... args) : fIndex(static_cast<index_type>(I)) {
     this->make<std::tuple_element_t<I, std::tuple<Ts...>>>(std::forward<Args>(args)...);
   }
-  constexpr variant(variant&& other) noexcept : fIndex(other.fIndex) { this->move_from(other); }
-  constexpr variant(const variant& other) : fIndex(other.fIndex) { this->copy_from(other); }
-  constexpr variant& operator=(variant&& other) noexcept {
+  constexpr variant(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Ts> && ...)) { this->move_from(other); }
+  constexpr variant(const variant& other) { this->copy_from(other); }
+  constexpr variant& operator=(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Ts> && ...)) {
     if (this != &other) {
       this->destroy();
-      fIndex = other.fIndex;
       this->move_from(other);
     }
     return *this;
@@ -151,7 +150,6 @@ class variant {
   constexpr variant& operator=(const variant& other) {
     if (this != &other) {
       this->destroy();
-      fIndex = other.fIndex;
       this->copy_from(other);
     }
     return *this;
@@ -168,7 +166,6 @@ class variant {
     requires detail::one_of<T, Ts...>
   constexpr T& emplace(Args&&... args) {
     this->destroy();
-    fIndex = static_cast<index_type>(detail::index_in<T, Ts...>());
     this->make<T>(std::forward<Args>(args)...);
     return value_of<T>(fObject);
   }
@@ -178,9 +175,11 @@ class variant {
     return this->emplace<std::tuple_element_t<I, std::tuple<Ts...>>>(std::forward<Args>(args)...);
   }
 
-  [[nodiscard]] constexpr std::size_t index() const noexcept { return fIndex; }
-  [[nodiscard]] constexpr bool valueless_by_exception() const noexcept { return false; }
-  constexpr void swap(variant& other) {
+  [[nodiscard]] constexpr std::size_t index() const noexcept { return this->valueless_by_exception() ? std::variant_npos : fIndex; }
+  [[nodiscard]] constexpr bool valueless_by_exception() const noexcept { return fIndex == kSize; }
+  constexpr void swap(variant& other) noexcept((std::is_nothrow_move_constructible_v<Ts> && ...)) {
+    if (this == &other)
+      return;
     variant kept(std::move(other));
     other = std::move(*this);
     *this = std::move(kept);
@@ -198,10 +197,12 @@ class variant {
 
   // The one held, as a T -- where it is one.
   template <class T>
+    requires detail::one_of<T, Ts...>
   [[nodiscard]] constexpr T* get_if() noexcept {
     return fIndex == detail::index_in<T, Ts...>() ? &this->template value<T>() : nullptr;
   }
   template <class T>
+    requires detail::one_of<T, Ts...>
   [[nodiscard]] constexpr const T* get_if() const noexcept {
     return fIndex == detail::index_in<T, Ts...>() ? &this->template value<T>() : nullptr;
   }
@@ -211,12 +212,18 @@ class variant {
   {
     if (a.fIndex != b.fIndex)
       return false;
+    if (a.valueless_by_exception())
+      return true;
     return a.visit([&]<class T>(const T& one) { return one == *b.template get_if<T>(); });
   }
   friend constexpr auto operator<=>(const variant& a, const variant& b)
     requires(std::three_way_comparable<Ts> && ...)
   {
     using order = std::common_comparison_category_t<std::compare_three_way_result_t<Ts>...>;
+    if (a.valueless_by_exception())
+      return b.valueless_by_exception() ? order::equivalent : order::less;
+    if (b.valueless_by_exception())
+      return order::greater;
     if (a.fIndex != b.fIndex)
       return order(a.fIndex <=> b.fIndex);
     return a.visit([&]<class T>(const T& one) -> order { return one <=> *b.template get_if<T>(); });
@@ -241,6 +248,8 @@ class variant {
   template <class R, bool Deduced, class F>
   constexpr decltype(auto) visit_as(F& f) {
     using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, first&>, R>;
+    if (this->valueless_by_exception())
+      throw std::bad_variant_access();
     held* const object = fObject;  // once, before the dispatch
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<Out (*)(F&, held*), kSize> table{
@@ -259,6 +268,8 @@ class variant {
   template <class R, bool Deduced, class F>
   constexpr decltype(auto) visit_as(F& f) const {
     using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, const first&>, R>;
+    if (this->valueless_by_exception())
+      throw std::bad_variant_access();
     const held* const object = fObject;  // once, before the dispatch
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<Out (*)(F&, const held*), kSize> table{
@@ -289,6 +300,8 @@ class variant {
   template <class T, class... Args>
   constexpr void make(Args&&... args) {
     fObject = make_held<T>(fBuffer, std::forward<Args>(args)...);
+    // Publish the alternative only after its construction succeeds.
+    fIndex = static_cast<index_type>(detail::index_in<T, Ts...>());
   }
   // Moving, copying, destroying: given the other's (or own) object as read
   // once before the dispatch, as a visit is.
@@ -306,36 +319,42 @@ class variant {
   }
   // Each operation for the one held: through its table, or its layer.
   constexpr void move_from(variant& other) {
+    if (other.valueless_by_exception())
+      return;
     held* const from = other.fObject;
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<void (*)(variant&, held*), kSize> table{&move_one<Ts>...};
       if consteval {
-        table[fIndex](*this, from);
+        table[other.fIndex](*this, from);
       } else {
         static const auto* volatile opaque = table.data();
-        opaque[fIndex](*this, from);
+        opaque[other.fIndex](*this, from);
       }
     } else {
       auto at = [this, from]<class T>(std::type_identity<T>) { move_one<T>(*this, from); };
-      detail::fold_to<void, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
+      detail::fold_to<void, decltype(at), Ts...>(other.fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
   constexpr void copy_from(const variant& other) {
+    if (other.valueless_by_exception())
+      return;
     const held* const from = other.fObject;
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<void (*)(variant&, const held*), kSize> table{&copy_one<Ts>...};
       if consteval {
-        table[fIndex](*this, from);
+        table[other.fIndex](*this, from);
       } else {
         static const auto* volatile opaque = table.data();
-        opaque[fIndex](*this, from);
+        opaque[other.fIndex](*this, from);
       }
     } else {
       auto at = [this, from]<class T>(std::type_identity<T>) { copy_one<T>(*this, from); };
-      detail::fold_to<void, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
+      detail::fold_to<void, decltype(at), Ts...>(other.fIndex, at, std::index_sequence_for<Ts...>{});
     }
   }
   constexpr void destroy() {
+    if (this->valueless_by_exception())
+      return;
     held* const object = fObject;
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<void (*)(held*), kSize> table{&destroy_one<Ts>...};
@@ -349,12 +368,15 @@ class variant {
       auto at = [object]<class T>(std::type_identity<T>) { destroy_one<T>(object); };
       detail::fold_to<void, decltype(at), Ts...>(fIndex, at, std::index_sequence_for<Ts...>{});
     }
+    fObject = nullptr;
+    fIndex = static_cast<index_type>(kSize);
   }
 
-  // Which one: in the smallest unsigned that holds every index.
+  // Which one: in the smallest unsigned that holds every index and kSize,
+  // the valueless state. No dispatch may use that state as an index.
   using index_type = std::conditional_t<(sizeof...(Ts) <= 0xff), std::uint8_t,
                                         std::conditional_t<(sizeof...(Ts) <= 0xffff), std::uint16_t, std::size_t>>;
-  index_type fIndex = 0;
+  index_type fIndex = static_cast<index_type>(kSize);
   alignas(holder<Ts>...) unsigned char fBuffer[std::max({sizeof(holder<Ts>)...})];
   held* fObject = nullptr;
 };
@@ -399,6 +421,7 @@ template <std::size_t I, class... Ts>
   return v && v->index() == I ? v->template get_if<std::tuple_element_t<I, std::tuple<Ts...>>>() : nullptr;
 }
 template <class T, class... Ts>
+  requires detail::one_of<T, Ts...>
 [[nodiscard]] constexpr bool holds_alternative(const variant<Ts...>& v) noexcept {
   return v.index() == detail::index_in<T, Ts...>();
 }

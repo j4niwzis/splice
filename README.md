@@ -27,8 +27,18 @@ std::string kind(const message& one) {
   reached through tables of function pointers, so that only the tables are
   made; in one, by halving the index, which the optimiser lays out as a jump.
   Everything is `constexpr`.
+  A failed replacement can leave the variant valueless: `index()` then
+  returns `std::variant_npos`, `get_if` returns null, and `get` and `visit`
+  throw `std::bad_variant_access`. It can be assigned or emplaced again;
+  valueless variants compare equal and order before variants holding a value.
+  Moves and swaps are `noexcept` only when every alternative's move
+  construction is nonthrowing.
 - **`spl::visit`** -- over one or more variants, splice's or std's.
 - **`spl::overloaded`** -- a visitor made of several callables.
+
+`spl::erased_call` also propagates exceptions from a held callable's copy or
+move construction. A failed assignment leaves an empty, reusable call;
+calling it returns an empty result, as for a default-constructed call.
 
 `docs/missed-optimisation-argument-promotion.md`: why the variant reads its
 object's pointer once before each dispatch.

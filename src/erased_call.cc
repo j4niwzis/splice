@@ -57,21 +57,21 @@ public:
     fObject = make_held<Call>(fBuffer, std::move(call));
   }
   constexpr erased_call(const erased_call& other) : fOps(other.fOps), fObject(other.fOps->copy(fBuffer, other.fObject)) {}
-  constexpr erased_call(erased_call&& other) noexcept
+  constexpr erased_call(erased_call&& other)
       : fOps(other.fOps), fObject(other.fOps->move(fBuffer, other.fObject)) {}
   constexpr erased_call& operator=(const erased_call& other) {
     if (this != &other) {
-      fOps->destroy(fObject);
+      this->reset();
+      fObject = other.fOps->copy(fBuffer, other.fObject);
       fOps = other.fOps;
-      fObject = fOps->copy(fBuffer, other.fObject);
     }
     return *this;
   }
-  constexpr erased_call& operator=(erased_call&& other) noexcept {
+  constexpr erased_call& operator=(erased_call&& other) {
     if (this != &other) {
-      fOps->destroy(fObject);
+      this->reset();
+      fObject = other.fOps->move(fBuffer, other.fObject);
       fOps = other.fOps;
-      fObject = fOps->move(fBuffer, other.fObject);
     }
     return *this;
   }
@@ -82,6 +82,12 @@ public:
   [[nodiscard]] constexpr bool holds() const noexcept { return fObject != nullptr; }
 
 private:
+  // A failed replacement leaves an empty call, with no stale object or ops.
+  constexpr void reset() {
+    fOps->destroy(fObject);
+    fObject = nullptr;
+    fOps = &kNothing;
+  }
   const ops* fOps = &kNothing;
   held* fObject = nullptr;
   alignas(std::max_align_t) unsigned char fBuffer[Capacity];
