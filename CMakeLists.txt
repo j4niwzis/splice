@@ -80,13 +80,31 @@ add_library(spl::splice ALIAS splice)
 # the declaration beside the library, under share/cmake-everywhere/ports, so
 # a prefix that has splice has its description too -- what lets a machine
 # answer for it, instead of everyone fetching it again.
+#
+# Which revision: the one this tree is, where it is a checkout -- not main.
+# The declaration goes beside whatever needed this library, and the next
+# build that reads it fetches what it names: main named whatever main had
+# become by then, a library the copy beside it was never built with.
+set(splice_revision main)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+  find_package(Git QUIET)
+  if(GIT_EXECUTABLE)
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" rev-parse HEAD
+      OUTPUT_VARIABLE splice_head OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET RESULT_VARIABLE splice_told)
+    if(splice_told EQUAL 0 AND splice_head MATCHES "^[0-9a-f]+$")
+      set(splice_revision "${splice_head}")
+    endif()
+  endif()
+endif()
 if(COMMAND cme_declare_port)
   cme_declare_port(
     NAME splice
     PROVIDES splice
     VERSION ${PROJECT_VERSION}
     GITHUB_REPOSITORY j4niwzis/splice
-    GIT_TAG main
+    GIT_TAG ${splice_revision}
     LICENSE GPL-3.0-only
     ${splice_depends}
     TARGETS spl::splice)
