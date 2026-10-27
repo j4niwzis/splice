@@ -187,6 +187,30 @@ TEST(Variant, Ordered) {
   EXPECT_NE(a, b);
 }
 
+TEST(Variant, AssignsItsOwnAlternativeWithoutDestroyingTheSource) {
+  const std::string text(1024, 'x');
+  spl::variant<int, std::string> one = text;
+  one = spl::get<std::string>(one);
+  EXPECT_EQ(spl::get<std::string>(one), text);
+  one = std::move(spl::get<std::string>(one));
+  // Self move assignment may leave the string empty, but it remains live.
+  spl::get<std::string>(one) = text;
+  EXPECT_EQ(spl::get<std::string>(one), text);
+}
+
+TEST(Variant, ReconstructsItsOwnConstructorOnlyAlternativeSafely) {
+  struct copied {
+    std::string text;
+    explicit copied(std::string value) : text(std::move(value)) {}
+    copied(const copied&) = default;
+    copied(copied&&) = delete;
+    copied& operator=(const copied&) = delete;
+  };
+  spl::variant<int, copied> one(std::in_place_type<copied>, std::string(1024, 'x'));
+  one = spl::get<copied>(one);
+  EXPECT_EQ(spl::get<copied>(one).text, std::string(1024, 'x'));
+}
+
 TEST(Variant, DestroysWhatItMakes) {
   {
     spl::variant<counted, int> one;

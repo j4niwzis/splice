@@ -161,7 +161,20 @@ class variant {
   template <class T>
     requires detail::one_of<std::remove_cvref_t<T>, Ts...>
   constexpr variant& operator=(T&& value) {
-    this->emplace<std::remove_cvref_t<T>>(std::forward<T>(value));
+    using Type = std::remove_cvref_t<T>;
+    if (Type* current = this->template get_if<Type>()) {
+      if constexpr (std::is_assignable_v<Type&, T&&>) {
+        *current = std::forward<T>(value);
+        return *this;
+      } else if (current == std::addressof(value)) {
+        // A constructor-only alternative may itself be the source. Keep it
+        // alive until its replacement has been made outside our storage.
+        Type kept(std::forward<T>(value));
+        this->emplace<Type>(std::move_if_noexcept(kept));
+        return *this;
+      }
+    }
+    this->emplace<Type>(std::forward<T>(value));
     return *this;
   }
   constexpr ~variant() { this->destroy(); }
